@@ -376,12 +376,11 @@ class Checkbox extends Backbone.View
     @listenTo @model, "change:#{@options.property}", @render
     @render()
 
-class Fixie
-  @PlainTextEditor = PlainTextEditor
-  @RichTextEditor = RichTextEditor
-  @DateEditor = DateEditor
-  @URLEditor = URLEditor
-  @Preview = Preview
-  @Checkbox = Checkbox
-
-@Fixie = Fixie
+@Fixie = {
+  PlainTextEditor
+  RichTextEditor
+  DateEditor
+  URLEditor
+  Preview
+  Checkbox
+}

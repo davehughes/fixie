@@ -1,5 +1,5 @@
 (function() {
-  var Checkbox, DateEditor, Editor, Fixie, PlainTextEditor, Preview, RichTextEditor, URLEditor, assert, bare_scrubber, checkQueue, convert_to, enqueue_children, find_command, handlebars_render, keep_children_scrubber, link_scrubber, render, scrub_link, verbose, _ref, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6,
+  var Checkbox, DateEditor, Editor, PlainTextEditor, Preview, RichTextEditor, URLEditor, assert, bare_scrubber, checkQueue, convert_to, enqueue_children, find_command, handlebars_render, keep_children_scrubber, link_scrubber, render, scrub_link, verbose, _ref, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6,
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
@@ -595,26 +595,14 @@
 
   })(Backbone.View);
 
-  Fixie = (function() {
-    function Fixie() {}
-
-    Fixie.PlainTextEditor = PlainTextEditor;
-
-    Fixie.RichTextEditor = RichTextEditor;
-
-    Fixie.DateEditor = DateEditor;
-
-    Fixie.URLEditor = URLEditor;
-
-    Fixie.Preview = Preview;
-
-    Fixie.Checkbox = Checkbox;
-
-    return Fixie;
-
-  })();
-
-  this.Fixie = Fixie;
+  this.Fixie = {
+    PlainTextEditor: PlainTextEditor,
+    RichTextEditor: RichTextEditor,
+    DateEditor: DateEditor,
+    URLEditor: URLEditor,
+    Preview: Preview,
+    Checkbox: Checkbox
+  };
 
 }).call(this);
 
