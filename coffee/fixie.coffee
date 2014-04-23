@@ -21,97 +21,66 @@ handlebars_render = (template_name, context) ->
 
 render = handlebars_render
 
-checkQueue = (queue) ->
-  for el in queue
-    if not el.parentNode
-      throw new Error 'orphaned node in queue'
+assert = (expr) ->
+  if not expr
+    throw new Error 'assertion failed'
 
-enqueue_children = (el, queue) ->
-  checkQueue(queue)
+wrapConfigurableScrubber = (scrubber, default_opts={}) ->
+  (el_or_opts) ->
+    if _.isPlainObject(el_or_opts)
+        opts = _.extend(default_opts, el_or_opts)
+        return (el) => scrubber(el, opts)
+    else
+        el = el_or_opts
+        return scrubber(el, default_opts)
 
-  if el.children
-    for elChild in el.children
-      assert queue.indexOf(elChild) is -1
-      queue.push elChild
-
-  return
-
-scrub_link = (link) ->
-  invalid_link_predicates = [
+scrubUrl = (url) ->
+  invalid_url_predicates = [
     /javascript/  #  Danger!
   ]
-  valid_link_predicates = [
+  valid_url_predicates = [
     /^https:\/\// #  HTTPS
     /^http:\/\//  #  HTTP
     /^\//         #  same hostname absolute path and protocol-retaining URL (//foo.com/bar/baz)
   ]
 
-  for bad_predicate in invalid_link_predicates
-    if bad_predicate.test link
-      console.log "scrub_link : warning : link #{link} was scrubbed as invalid"
+  for bad_predicate in invalid_url_predicates
+    if bad_predicate.test(url)
+      console.log "scrubUrl : warning : url #{url} was scrubbed as invalid"
       return null
-  for good_predicate in valid_link_predicates
-    if good_predicate.test link
-      return link
+  for good_predicate in valid_url_predicates
+    if good_predicate.test(url)
+      return url
 
-bare_scrubber = (el, queue) ->
-  enqueue_children el, queue
-  i = el.attributes.length - 1
-  while i >= 0
-    el.removeAttributeNode el.attributes.item i
-    i = i - 1
+stripScrubber = (el) -> null
+
+scrubAttributes = (el, opts) ->
+  exceptions = opts?.except ? []
+  $el = $(el)
+  attrNames = _.map el.attributes, (attr, idx) -> attr.name
+  _.each attrNames, (attrName) ->
+    if attrName in exceptions
+      return
+    else
+      $el.removeAttr(attrName)
   return el
+scrubAttributes = wrapConfigurableScrubber(scrubAttributes)
+        
+    
+convertTagScrubber = (el, opts) ->
+  $("<#{opts.tagName}>").append($(el).contents())
+convertTagScrubber = wrapConfigurableScrubber(convertTagScrubber)
 
-convert_to = (newTagName) ->
-  return (el, queue) ->
-    if not el.parentNode
-      throw new Error 'orphaned node given to convert_to'
-    childNodes = el.childNodes
-    elNew = el.parentNode.insertBefore(document.createElement(newTagName), el)
-    nodesToMove = []
-    for elChildNode in childNodes
-      nodesToMove.push elChildNode
-    for elChildNode in nodesToMove
-      elNew.appendChild elChildNode
-    if el.childNodes.length isnt 0
-      throw new Error 'el.childNodes should be 0'
-    el.parentNode.removeChild el
-    checkQueue(queue)
-    return elNew
+keepContentsScrubber = (el, opts) -> $(el).children()
+keepContentsScrubber = wrapConfigurableScrubber(keepContentsScrubber)
 
-assert = (expr) ->
-  if not expr
-    throw new Error 'assertion failed'
-
-keep_children_scrubber = (el, queue) ->
-  assert queue.indexOf(el) is -1
-  checkQueue(queue)
-  if not el.parentNode
-    throw new Error 'orphaned node given to convert_to'
-  enqueue_children el, queue
-  checkQueue(queue)
-  childNodes = el.childNodes
-  elInsertBefore = el
-  if childNodes
-    i = childNodes.length - 1
-    while i >= 0
-      elInsertBefore = el.parentNode.insertBefore childNodes[i], elInsertBefore
-      checkQueue(queue)
-      i = i - 1
-  checkQueue(queue)
-  el.parentNode.removeChild el
-  checkQueue(queue)
-  return null
-
-link_scrubber = (attribute, scrub_link) ->
-  return (el, queue) ->
-    scrubbed_attr = null
-    if el.hasAttribute attribute
-      scrubbed_attr = scrub_link el.getAttribute attribute
-    bare_scrubber el, queue
-    if scrubbed_attr
-      el.setAttribute attribute, scrubbed_attr
-    return
+scrubLink = (el, opts) ->
+  $el = $(el)
+  rawAttr = $el.attr(opts.attribute)
+  $el.attr(opts.attribute, opts.scrubUrlFunc(rawAttr))
+scrubLink = wrapConfigurableScrubber scrubLink,
+  attribute: 'href'
+  scrubUrlFunc: scrubUrl
 
 find_command = (node) ->
   while node and node.nodeType is Node.ELEMENT_NODE
@@ -120,86 +89,120 @@ find_command = (node) ->
     node = node.parentNode
   return null
 
+
+class Scrubber
+
+  constructor: (@rules) ->
+    @rules.default ?= keepContentsScrubber
+
+  cleanNode: (node) =>
+    if not node then return
+    @cleanNodeInitial(node)
+    return @cleanNodeBFS(node)
+
+  cleanNodeInitial: (node) =>
+    if not node then return
+
+    _(node.children)
+      .first((child) -> child.tagName.toLowerCase() is 'br')
+      .each((child) -> child.remove())
+
+  cleanNodeBFS: (node) =>
+    tagFilters = @resolveFilters(node) 
+    for filter in tagFilters
+      next = filter(node)
+      if next == node
+        continue
+      if not next
+        $(node).remove()
+        return null
+      else
+        $(node).replaceWith(next)
+        _.each next, (n) => @cleanNodeBFS(n)
+        return next
+
+    _.each $(node).children(), (n) => @cleanNodeBFS(n)
+    return $(node).children()
+
+  resolveFilters: (el) =>
+    tagName = el.tagName.toLowerCase()
+    tag_filters = @rules[tagName] or @rules.default
+    if typeof tag_filters is 'function'
+      tag_filters = [tag_filters]
+    for tag_filter in tag_filters
+      if typeof tag_filter isnt 'function'
+        throw new Error 'Fixie : error : found a tag_filter that wasn\'t a function'
+    return tag_filters
+  
+
 class Editor extends Backbone.View
   displayError: (error) =>
     @el.style.backgroundColor = '#ffbbbb'
 
   initialize: =>
+    @on_edit = _.throttle(@on_edit, @options.editThrottle ? 250, {trailing: true})
     @listenTo @model, "synced", =>
       @el.style.backgroundColor = 'white'
     @listenTo @model, "validation-error", (error) =>
-      if error.field is @options.text
+      if error.field is @options.property
         @displayError error
     do @render
   cmd: (cmd_name) =>
     console.log "Fixie.Editor : info : running command '#{cmd_name}'"
 
-  _clean_node_core: (node, rules) =>
-    if not node
-      return
-
-    queue = []
-
-    # HACK: remove useless BR tags at the beginning of the contenteditable
-    while node.childNodes.length > 0
-      firstChild = node.childNodes[0]
-      if firstChild.nodeType is Node.ELEMENT_NODE and firstChild.tagName.toLowerCase() is 'br'
-        node.removeChild firstChild
-      else
-        break
-    enqueue_children node, queue
-
-    while queue.length > 0
-      el = queue.pop()
-      checkQueue(queue)
-      tagName = el.tagName.toLowerCase()
-      if tagName not of rules
-        keep_children_scrubber el, queue
-      else
-        tag_filters = rules[tagName]
-        if typeof tag_filters is 'function'
-          tag_filters = [tag_filters]
-        for tag_filter in tag_filters
-          if typeof tag_filter isnt 'function'
-            throw new Error 'Fixie : error : found a tag_filter that wasn\'t a function'
-          el = tag_filter el, queue
-      checkQueue(queue)
-    return
-
   clean_editor_content: =>
     content = @$('.fixie-editor-content')[0]
-    @_clean_node_core content, _.result(@, 'rules')
+    @scrubber.cleanNode(content)
     return content.innerHTML
 
-  _on_edit_core: =>
-    console.log "Fixie.Editor : info : #{@options.text} was edited"
-    prop_set = {}
-    prop_set[@options.text] = @clean_editor_content()
-    @stopListening @model, "change:#{@options.text}"
-    @model.set prop_set
-
   on_edit: =>
-    if @edit_timer
-      window.clearTimeout @edit_timer
-    @edit_timer = window.setTimeout @_on_edit_core, 250
+    console.log "Fixie.Editor : info : #{@options.property} was edited"
+    @stopListening @model, "change:#{@options.property}"
+    @model.set(@options.property, @clean_editor_content())
 
 
 class Preview extends Backbone.View
   render: =>
-    if not @options.text
+    if not @options.property
       throw new Error 'Fixie.Preview : error : you must specify a "text" property name on Fixie.Preview instances'
-    @el.innerHTML = model.get @options.text
+    @el.innerHTML = model.get @options.property
     @
 
   initialize: =>
     if not @el
         throw new Error 'Couldn\'t find el'
-    @listenTo @model, "change:#{@options.text}", @render
+    @listenTo @model, "change:#{@options.property}", @render
     @render()
+
+class TemplatePreview extends Preview
+  render: =>
+    if not @options.property
+      throw new Error 'Fixie.Preview : error : you must specify a "text" property name on Fixie.Preview instances'
+    template = model.get(@options.property)
+    rendered = nunjucks.renderString(template, @options?.data or {})
+    @el.innerHTML = rendered
+    @
+
+RuleSets = 
+  PlainText: {}
+  RichText:
+    a: [scrubLink, scrubAttributes {except: 'href'}]
+    b: scrubAttributes
+    i: scrubAttributes
+    br: scrubAttributes
+    p: scrubAttributes
+    strong: scrubAttributes
+    em: scrubAttributes
+    ul: scrubAttributes
+    ol: scrubAttributes
+    li: scrubAttributes
+    div: scrubAttributes
+    h3: convertTagScrubber {tagName: 'p'}
+    default: stripScrubber
 
 class URLEditor extends Editor
   template: 'fixie-url-editor'
-  rules: {}
+  scrubber: new Scrubber(RuleSets.PlainText)
   events: =>
     'keyup .fixie-editor-content': @on_edit
     'paste .fixie-editor-content': @on_edit
@@ -208,7 +211,7 @@ class URLEditor extends Editor
   on_link_edit: =>
     link = window.prompt 'Please enter a URL:', @model.get(@options.link_url)
     prop_set = {}
-    prop_set[@options.link_url] = (scrub_link link) or ''
+    prop_set[@options.link_url] = (scrubUrl link) or ''
     @model.set prop_set
     @render()
 
@@ -216,19 +219,19 @@ class URLEditor extends Editor
     template = (_.result @options, 'template') or (_.result @, 'template')
     context =
       link_url: @model.get(@options.link_url)
-      text: @model.get(@options.text)
+      text: @model.get(@options.property)
     template_result = render template, context
     @$el.html(template_result)
     @
 
   initialize: =>
     @render()
-    if not @model.has(@options.text)
+    if not @model.has(@options.property)
       @listenToOnce @model, 'change', @render
 
 class PlainTextEditor extends Editor
   template: 'fixie-plain-editor'
-  rules: {}
+  scrubber: new Scrubber(RuleSets.PlainText)
   events: =>
     'keyup .fixie-editor-content': @on_edit
     'paste .fixie-editor-content': @on_edit
@@ -250,10 +253,10 @@ class PlainTextEditor extends Editor
   render: =>
     template = (_.result @options, 'template') or (_.result @, 'template')
     context =
-      text: @model.get(@options.text)
+      text: @model.get(@options.property)
     template_result = render template, context
     @$el.html(template_result)
-    @listenToOnce @model, "change:#{@options.text}", @render
+    @listenToOnce @model, "change:#{@options.property}", @render
     @
 
   initialize: =>
@@ -262,18 +265,7 @@ class PlainTextEditor extends Editor
 
 class RichTextEditor extends Editor
   template: 'fixie-rich-editor'
-  rules:
-    'a': link_scrubber 'href', scrub_link
-    'b': bare_scrubber
-    'i': bare_scrubber
-    'br': bare_scrubber
-    'p': bare_scrubber
-    'strong': bare_scrubber
-    'em': bare_scrubber
-    'ul': bare_scrubber
-    'ol': bare_scrubber
-    'li': bare_scrubber
-    'div': bare_scrubber
+  scrubber: new Scrubber(RuleSets.RichText)
 
   dispatch: (command) =>
     if document.execCommand
@@ -288,7 +280,8 @@ class RichTextEditor extends Editor
 
   insertLink: =>
     if document?.queryCommandEnabled 'createlink'
-      link = scrub_link window.prompt 'Please enter a URL:', @model.get(@options.link_url)
+      linkUrl = window.prompt('Please enter a URL:', @model.get(@options.link_url))
+      link = scrubUrl(linkUrl)
       if link
         document.execCommand 'createlink', false, link
         @on_edit()
@@ -320,14 +313,14 @@ class RichTextEditor extends Editor
   render: =>
     template = (_.result @options, 'template') or (_.result @, 'template')
     context =
-      text: @model.get(@options.text)
+      text: @model.get(@options.property)
     template_result = render template, context
     @$el.html(template_result)
 
     for toolbar_item in @$('.fixie-toolbar-item')
       toolbar_item.onmousedown = -> event.preventDefault()
 
-    @listenToOnce @model, "change:#{@options.text}", @render
+    @listenToOnce @model, "change:#{@options.property}", @render
     @
 
   initialize: =>
@@ -335,16 +328,16 @@ class RichTextEditor extends Editor
     super
 
 class DateEditor extends PlainTextEditor
-  _on_edit_core: =>
-    console.log "Fixie.DateEditor : info : #{@options.text} was edited"
+  on_edit: =>
+    console.log "Fixie.DateEditor : info : #{@options.property} was edited"
     try
       format = @options.format or 'iso'
       val = (new Date(@clean_editor_content())).toISOString()
       if format == 'date'
         val = val.substring(0, 10) # Grab the date part
       prop_set = {}
-      prop_set[@options.text] = val
-      @stopListening @model, "change:#{@options.text}"
+      prop_set[@options.property] = val
+      @stopListening @model, "change:#{@options.property}"
       @model.set prop_set
     catch e
     return
@@ -376,11 +369,58 @@ class Checkbox extends Backbone.View
     @listenTo @model, "change:#{@options.property}", @render
     @render()
 
-@Fixie = {
+# Interactive preview classes
+class FiddleModel extends Backbone.Model
+  
+class FiddleView extends Backbone.View
+  template: 'fixie-fiddle-view'
+  events:
+    "keyup #raw-dom": 'updateFromRawDOM'
+    "keyup #raw-html": 'updateFromRawHTML'
+  
+  initialize: ->
+    @scrubber = new Scrubber(RuleSets.RichText)
+    @listenTo @model, "change:raw-dom", @rawDOMUpdated
+    @listenTo @model, "change:raw-html", @rawHTMLUpdated
+    @render()
+  
+  rawDOMUpdated: =>
+    scrubbedSelection = $(@scrubber.cleanNode($("<div>#{@model.get('raw-dom')}</div>")[0]))
+    @$('#raw-html').val(@model.get('raw-dom'))
+    @$('#scrubbed-dom').empty().append(scrubbedSelection)
+    @$('#scrubbed-html').text(scrubbedSelection.html())
+
+  rawHTMLUpdated: =>
+    rawHTML = @model.get('raw-html')
+
+    scrubbedSelection = $(@scrubber.cleanNode($("<div>#{rawHTML}</div>")[0]))
+    @$('#raw-dom').html(rawHTML)
+    @$('#scrubbed-dom').empty().append(scrubbedSelection)
+    @$('#scrubbed-html').text(scrubbedSelection.html())
+
+  updateFromRawDOM: =>
+    @model.set 'raw-dom', @$('#raw-dom').html()
+
+  updateFromRawHTML: =>
+    @model.set 'raw-html', @$('#raw-html').val()
+
+  render: =>
+    template = (_.result @options, 'template') or (_.result @, 'template')
+    context =
+        RuleSets: RuleSets
+    template_result = render template, context
+    @$el.html(template_result)
+    @
+
+@Fixie ?= {
   PlainTextEditor
   RichTextEditor
   DateEditor
   URLEditor
   Preview
+  TemplatePreview
   Checkbox
+  FiddleModel
+  FiddleView
+  RuleSets
 }

@@ -1,0 +1,31 @@
+<html>
+	<head>
+		<title>Fiddle with Fixie</title>
+		<link href="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet">
+		<link href="http://netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.min.css" rel="stylesheet">
+		<link href="../gen/css/fiddle.css" rel="stylesheet">
+
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/lodash.js/1.2.1/lodash.min.js"></script>
+		<script src="http://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.0.0/backbone-min.js"></script>
+		<script src="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+		<script src="../js/handlebars.js"></script>
+
+		<script src="../gen/js/fixie.js"></script>
+		<script src="../gen/js/fixie-templates.js"></script>
+	</head>
+
+	<body>
+		<div class="fixie-fiddle"></div>
+
+		<script>
+			$(function () {
+				var model = new Fixie.FiddleModel(),
+					view = new Fixie.FiddleView({
+						model: model,
+						el: $('.fixie-fiddle'),
+						})
+			})
+		</script>
+	</body>
+</html>

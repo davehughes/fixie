@@ -15,6 +15,15 @@ helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
   return buffer;
   });
 
+this["App"]["Handlebars"]["fixie-fiddle-view"] = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
+  this.compilerInfo = [4,'>= 1.0.0'];
+helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
+  
+
+
+  return "<div class=\"container fiddle-container\">\n    <div class=\"row\">\n        <h1>Fiddle with Fixie <i class=\"fa fa-gears\"></i></h1>\n        <section class=\"col-xs-6\">\n            <div id=\"raw-dom\" contenteditable></div>\n            <span class=\"section-label\">Raw DOM</span>\n        </section>\n\n        <section class=\"col-xs-6\">\n            <textarea id=\"raw-html\"/>\n            <span class=\"section-label\">Raw HTML</span>\n        </section>\n    </div>\n    <div class=\"row\">\n        <section class=\"col-xs-6\">\n            <div id=\"scrubbed-dom\"></div>\n            <span class=\"section-label\">Scrubbed DOM <i class=\"fa fa-lock\"></i></span>\n        </section>\n        <section class=\"col-xs-6\">\n            <div id=\"scrubbed-html\"/>\n            <span class=\"section-label\">Scrubbed HTML <i class=\"fa fa-lock\"></i></span>\n        </section>\n    </div>\n</div>\n";
+  });
+
 this["App"]["Handlebars"]["fixie-plain-editor"] = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
   this.compilerInfo = [4,'>= 1.0.0'];
 helpers = this.merge(helpers, Handlebars.helpers); data = data || {};

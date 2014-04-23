@@ -1,0 +1,27 @@
+.fiddle-container section {
+  position: relative;
+  padding: 0;
+}
+.fiddle-container section span.section-label {
+  position: absolute;
+  right: 0px;
+  bottom: 0px;
+  background-color: rgba(0, 0, 255, 0.05);
+  padding: 5px;
+  border-top-left-radius: 5px;
+  border: 1px solid #DDD;
+}
+#raw-dom,
+#scrubbed-dom,
+#raw-html,
+#scrubbed-html {
+  box-sizing: border-box;
+  width: 100%;
+  height: 200px;
+  overflow-y: auto;
+  border: 1px solid #DDD;
+}
+#raw-dom,
+#scrubbed-dom {
+  border: 1px solid #DDD;
+}

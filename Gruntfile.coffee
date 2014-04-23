@@ -4,8 +4,8 @@ module.exports = (grunt) ->
     pkg: grunt.file.readJSON('package.json')
 
     coffee:
-      options:
-        sourceMap: true
+      # options:
+      #   sourceMap: true
       compile:
         files: [{
           expand: true
@@ -28,12 +28,13 @@ module.exports = (grunt) ->
             filename = filename.replace /handlebars\//, ''
             filename.replace /\.hbs$/, ''
 
-    # less:
-    #   development:
-    #     options:
-    #       dumpLineNumbers: true
-    #     files:
-    #       'gen/css/style.css': 'less/style.less'
+    less:
+      development:
+        options:
+          dumpLineNumbers: true
+        files:
+          'gen/css/style.css': 'less/style.less'
+          'gen/css/fiddle.css': 'less/fiddle.less'
 
     #   production:
     #     options:
@@ -68,4 +69,4 @@ module.exports = (grunt) ->
   grunt.loadNpmTasks('grunt-contrib-watch')
   grunt.loadNpmTasks('grunt-contrib-handlebars')
 
-  grunt.registerTask('default', ['coffee', 'handlebars'])
+  grunt.registerTask('default', ['coffee', 'handlebars', 'less'])
