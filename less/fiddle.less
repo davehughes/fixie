@@ -35,10 +35,21 @@
     border: 1px solid #DDD;
 }
 
-#raw-dom { border-top-left-radius: 20px; }
-#raw-html { border-top-right-radius: 20px; }
-#scrubbed-dom { border-bottom-left-radius: 20px; }
-#scrubbed-html { border-bottom-right-radius: 20px; }
+#raw-dom { 
+    border-top-left-radius: 20px;
+}
+#raw-html { 
+    border-top-right-radius: 20px;
+}
+#scrubbed-dom {
+    border-bottom-left-radius: 20px;
+}
+#scrubbed-html {
+    border-bottom-right-radius: 20px;
+    & + .section-label {
+        border-bottom-right-radius: 20px;
+    }
+}
 
 #scrubbed-dom, 
 #scrubbed-html {

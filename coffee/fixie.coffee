@@ -55,11 +55,20 @@ scrubUrl = (url) ->
 stripScrubber = (el) -> null
 
 scrubAttributes = (el, opts) ->
-  exceptions = opts?.except ? []
+  only = opts?.only
+  if only? and not _.isArray(only)
+    only = [only]
+
+  except = opts?.except
+  if except? and not _.isArray(except)
+    except = [except]
+
   $el = $(el)
   attrNames = _.map el.attributes, (attr, idx) -> attr.name
   _.each attrNames, (attrName) ->
-    if attrName in exceptions
+    if only and attrName not in only
+      return
+    else if except and attrName in except
       return
     else
       $el.removeAttr(attrName)
@@ -71,8 +80,10 @@ convertTagScrubber = (el, opts) ->
   $("<#{opts.tagName}>").append($(el).contents())
 convertTagScrubber = wrapConfigurableScrubber(convertTagScrubber)
 
-keepContentsScrubber = (el, opts) -> $(el).children()
+
+keepContentsScrubber = (el, opts) -> $(el).contents()
 keepContentsScrubber = wrapConfigurableScrubber(keepContentsScrubber)
+
 
 scrubLink = (el, opts) ->
   $el = $(el)
@@ -81,14 +92,6 @@ scrubLink = (el, opts) ->
 scrubLink = wrapConfigurableScrubber scrubLink,
   attribute: 'href'
   scrubUrlFunc: scrubUrl
-
-find_command = (node) ->
-  while node and node.nodeType is Node.ELEMENT_NODE
-    if node.hasAttribute 'data-fixie-cmd'
-      return node.getAttribute 'data-fixie-cmd'
-    node = node.parentNode
-  return null
-
 
 class Scrubber
 
@@ -122,7 +125,7 @@ class Scrubber
         return next
 
     _.each $(node).children(), (n) => @cleanNodeBFS(n)
-    return $(node).children()
+    return node
 
   resolveFilters: (el) =>
     tagName = el.tagName.toLowerCase()
@@ -140,25 +143,26 @@ class Editor extends Backbone.View
     @el.style.backgroundColor = '#ffbbbb'
 
   initialize: =>
-    @on_edit = _.throttle(@on_edit, @options.editThrottle ? 250, {trailing: true})
+    @onEdit = _.throttle(@onEdit, @options.editThrottle ? 250, {trailing: true})
     @listenTo @model, "synced", =>
       @el.style.backgroundColor = 'white'
     @listenTo @model, "validation-error", (error) =>
       if error.field is @options.property
         @displayError error
     do @render
+
   cmd: (cmd_name) =>
     console.log "Fixie.Editor : info : running command '#{cmd_name}'"
 
-  clean_editor_content: =>
+  cleanEditorContent: =>
     content = @$('.fixie-editor-content')[0]
     @scrubber.cleanNode(content)
     return content.innerHTML
 
-  on_edit: =>
+  onEdit: =>
     console.log "Fixie.Editor : info : #{@options.property} was edited"
     @stopListening @model, "change:#{@options.property}"
-    @model.set(@options.property, @clean_editor_content())
+    @model.set(@options.property, @cleanEditorContent())
 
 
 class Preview extends Backbone.View
@@ -197,15 +201,14 @@ RuleSets =
     ol: scrubAttributes
     li: scrubAttributes
     div: scrubAttributes
-    h3: convertTagScrubber {tagName: 'p'}
-    default: stripScrubber
+    default: scrubAttributes
 
 class URLEditor extends Editor
   template: 'fixie-url-editor'
   scrubber: new Scrubber(RuleSets.PlainText)
   events: =>
-    'keyup .fixie-editor-content': @on_edit
-    'paste .fixie-editor-content': @on_edit
+    'keyup .fixie-editor-content': @onEdit
+    'paste .fixie-editor-content': @onEdit
     'click .fixie-url-link-edit': @on_link_edit
  
   on_link_edit: =>
@@ -233,10 +236,10 @@ class PlainTextEditor extends Editor
   template: 'fixie-plain-editor'
   scrubber: new Scrubber(RuleSets.PlainText)
   events: =>
-    'keyup .fixie-editor-content': @on_edit
-    'paste .fixie-editor-content': @on_edit
+    'keyup .fixie-editor-content': @onEdit
+    'paste .fixie-editor-content': @onEdit
 
-  clean_editor_content: =>
+  cleanEditorContent: =>
     $el = @$('.fixie-editor-content')
     content = $el.text()
     content = content.replace(/[\r\n]/g, ' ')
@@ -267,48 +270,13 @@ class RichTextEditor extends Editor
   template: 'fixie-rich-editor'
   scrubber: new Scrubber(RuleSets.RichText)
 
-  dispatch: (command) =>
-    if document.execCommand
-      if command and document.queryCommandEnabled command
-        console.log "Fixie.Editor : info : running command '#{command}'"
-        document.execCommand command
-        @on_edit()
-      else
-        console.log "Fixie.Editor : info : command #{command} is currently not enabled."
-    else
-      throw new Error 'Fixie.Editor : error : browser support is not available for this operation'
-
-  insertLink: =>
-    if document?.queryCommandEnabled 'createlink'
-      linkUrl = window.prompt('Please enter a URL:', @model.get(@options.link_url))
-      link = scrubUrl(linkUrl)
-      if link
-        document.execCommand 'createlink', false, link
-        @on_edit()
-      else
-        window.alert 'Please try again. Urls must begin with /, http://, or https://'
-    console.log 'Fixie.Editor : info : createlink is not enabled'
-
-  exec_cmd: =>
-    cmd_dispatch =
-      bold: @dispatch
-      italic: @dispatch
-      insertOrderedList: @dispatch
-      insertUnorderedList: @dispatch
-      insertLink: @insertLink
-
-    command = find_command(event.target)
-    if command of cmd_dispatch
-      dispatch = cmd_dispatch[command](command)
-    else
-      throw new Error 'Fixie.Editor : error : unexepected fixie-cmd'
-
-    return false
+  initialize: ->
+    # TODO consider pre-scrubbing the HTML prior to rendering
 
   events: =>
-    'click .fixie-toolbar-item': @exec_cmd
-    'keyup .fixie-editor-content': @on_edit
-    'paste .fixie-editor-content': @on_edit
+    'click .fixie-toolbar-item': @execCmd
+    'keyup .fixie-editor-content': @onEdit
+    'paste .fixie-editor-content': @onEdit
 
   render: =>
     template = (_.result @options, 'template') or (_.result @, 'template')
@@ -323,16 +291,52 @@ class RichTextEditor extends Editor
     @listenToOnce @model, "change:#{@options.property}", @render
     @
 
-  initialize: =>
-    # TODO consider pre-scrubbing the HTML prior to rendering
-    super
+  dispatch: (command) =>
+    if document.execCommand
+      if command and document.queryCommandEnabled command
+        console.log "Fixie.Editor : info : running command '#{command}'"
+        document.execCommand command
+        @onEdit()
+      else
+        console.log "Fixie.Editor : info : command #{command} is currently not enabled."
+    else
+      throw new Error 'Fixie.Editor : error : browser support is not available for this operation'
+
+  insertLink: =>
+    if document?.queryCommandEnabled 'createlink'
+      linkUrl = window.prompt('Please enter a URL:', @model.get(@options.link_url))
+      link = scrubUrl(linkUrl)
+      if link
+        document.execCommand 'createlink', false, link
+        @onEdit()
+      else
+        window.alert 'Please try again. Urls must begin with /, http://, or https://'
+    console.log 'Fixie.Editor : info : createlink is not enabled'
+
+  execCmd: =>
+    dispatchTable =
+      bold: @dispatch
+      italic: @dispatch
+      insertOrderedList: @dispatch
+      insertUnorderedList: @dispatch
+      insertLink: @insertLink
+
+    commandName = $(event.target).closest('[data-fixie-cmd]').data('fixie-cmd')
+    command = dispatchTable[commandName]
+
+    if not command
+      throw new Error "Fixie.Editor : error : unexepected fixie-cmd: #{commandName}"
+
+    command(commandName)
+    return false
+
 
 class DateEditor extends PlainTextEditor
-  on_edit: =>
+  onEdit: =>
     console.log "Fixie.DateEditor : info : #{@options.property} was edited"
     try
       format = @options.format or 'iso'
-      val = (new Date(@clean_editor_content())).toISOString()
+      val = (new Date(@cleanEditorContent())).toISOString()
       if format == 'date'
         val = val.substring(0, 10) # Grab the date part
       prop_set = {}
@@ -388,7 +392,8 @@ class FiddleView extends Backbone.View
     scrubbedSelection = $(@scrubber.cleanNode($("<div>#{@model.get('raw-dom')}</div>")[0]))
     @$('#raw-html').val(@model.get('raw-dom'))
     @$('#scrubbed-dom').empty().append(scrubbedSelection)
-    @$('#scrubbed-html').text(scrubbedSelection.html())
+    scrubbedHTML = _.reduce(scrubbedSelection, ((acc, x) -> acc + x.outerHTML), '')
+    @$('#scrubbed-html').text(scrubbedHTML)
 
   rawHTMLUpdated: =>
     rawHTML = @model.get('raw-html')
@@ -396,7 +401,8 @@ class FiddleView extends Backbone.View
     scrubbedSelection = $(@scrubber.cleanNode($("<div>#{rawHTML}</div>")[0]))
     @$('#raw-dom').html(rawHTML)
     @$('#scrubbed-dom').empty().append(scrubbedSelection)
-    @$('#scrubbed-html').text(scrubbedSelection.html())
+    scrubbedHTML = _.reduce(scrubbedSelection, ((acc, x) -> acc + x.outerHTML), '')
+    @$('#scrubbed-html').text(scrubbedHTML)
 
   updateFromRawDOM: =>
     @model.set 'raw-dom', @$('#raw-dom').html()

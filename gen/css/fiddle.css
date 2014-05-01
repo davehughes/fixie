@@ -20,8 +20,35 @@
   height: 200px;
   overflow-y: auto;
   border: 1px solid #DDD;
+  padding: 10px;
+}
+#raw-dom:focus,
+#scrubbed-dom:focus,
+#raw-html:focus,
+#scrubbed-html:focus {
+  outline: none;
+  box-shadow: 0 0 20px 1px rgba(0, 0, 0, 0.1) inset;
 }
 #raw-dom,
 #scrubbed-dom {
   border: 1px solid #DDD;
+}
+#raw-dom {
+  border-top-left-radius: 20px;
+}
+#raw-html {
+  border-top-right-radius: 20px;
+}
+#scrubbed-dom {
+  border-bottom-left-radius: 20px;
+}
+#scrubbed-html {
+  border-bottom-right-radius: 20px;
+}
+#scrubbed-html + .section-label {
+  border-bottom-right-radius: 20px;
+}
+#scrubbed-dom,
+#scrubbed-html {
+  background-color: rgba(0, 0, 1, 0.02);
 }

@@ -1,5 +1,5 @@
 (function() {
-  var Checkbox, DateEditor, Editor, FiddleModel, FiddleView, PlainTextEditor, Preview, RichTextEditor, RuleSets, Scrubber, TemplatePreview, URLEditor, assert, convertTagScrubber, find_command, handlebars_render, keepContentsScrubber, render, scrubAttributes, scrubLink, scrubUrl, stripScrubber, verbose, wrapConfigurableScrubber, _ref, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7, _ref8, _ref9,
+  var Checkbox, DateEditor, Editor, FiddleModel, FiddleView, PlainTextEditor, Preview, RichTextEditor, RuleSets, Scrubber, TemplatePreview, URLEditor, assert, convertTagScrubber, handlebars_render, keepContentsScrubber, render, scrubAttributes, scrubLink, scrubUrl, stripScrubber, verbose, wrapConfigurableScrubber, _ref, _ref1, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7, _ref8, _ref9,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
@@ -72,14 +72,23 @@
   };
 
   scrubAttributes = function(el, opts) {
-    var $el, attrNames, exceptions, _ref;
-    exceptions = (_ref = opts != null ? opts.except : void 0) != null ? _ref : [];
+    var $el, attrNames, except, only;
+    only = opts != null ? opts.only : void 0;
+    if ((only != null) && !_.isArray(only)) {
+      only = [only];
+    }
+    except = opts != null ? opts.except : void 0;
+    if ((except != null) && !_.isArray(except)) {
+      except = [except];
+    }
     $el = $(el);
     attrNames = _.map(el.attributes, function(attr, idx) {
       return attr.name;
     });
     _.each(attrNames, function(attrName) {
-      if (__indexOf.call(exceptions, attrName) >= 0) {
+      if (only && __indexOf.call(only, attrName) < 0) {
+
+      } else if (except && __indexOf.call(except, attrName) >= 0) {
 
       } else {
         return $el.removeAttr(attrName);
@@ -97,7 +106,7 @@
   convertTagScrubber = wrapConfigurableScrubber(convertTagScrubber);
 
   keepContentsScrubber = function(el, opts) {
-    return $(el).children();
+    return $(el).contents();
   };
 
   keepContentsScrubber = wrapConfigurableScrubber(keepContentsScrubber);
@@ -113,16 +122,6 @@
     attribute: 'href',
     scrubUrlFunc: scrubUrl
   });
-
-  find_command = function(node) {
-    while (node && node.nodeType === Node.ELEMENT_NODE) {
-      if (node.hasAttribute('data-fixie-cmd')) {
-        return node.getAttribute('data-fixie-cmd');
-      }
-      node = node.parentNode;
-    }
-    return null;
-  };
 
   Scrubber = (function() {
     function Scrubber(rules) {
@@ -180,7 +179,7 @@
       _.each($(node).children(), function(n) {
         return _this.cleanNodeBFS(n);
       });
-      return $(node).children();
+      return node;
     };
 
     Scrubber.prototype.resolveFilters = function(el) {
@@ -207,8 +206,8 @@
     __extends(Editor, _super);
 
     function Editor() {
-      this.on_edit = __bind(this.on_edit, this);
-      this.clean_editor_content = __bind(this.clean_editor_content, this);
+      this.onEdit = __bind(this.onEdit, this);
+      this.cleanEditorContent = __bind(this.cleanEditorContent, this);
       this.cmd = __bind(this.cmd, this);
       this.initialize = __bind(this.initialize, this);
       this.displayError = __bind(this.displayError, this);
@@ -223,7 +222,7 @@
     Editor.prototype.initialize = function() {
       var _ref1,
         _this = this;
-      this.on_edit = _.throttle(this.on_edit, (_ref1 = this.options.editThrottle) != null ? _ref1 : 250, {
+      this.onEdit = _.throttle(this.onEdit, (_ref1 = this.options.editThrottle) != null ? _ref1 : 250, {
         trailing: true
       });
       this.listenTo(this.model, "synced", function() {
@@ -241,17 +240,17 @@
       return console.log("Fixie.Editor : info : running command '" + cmd_name + "'");
     };
 
-    Editor.prototype.clean_editor_content = function() {
+    Editor.prototype.cleanEditorContent = function() {
       var content;
       content = this.$('.fixie-editor-content')[0];
       this.scrubber.cleanNode(content);
       return content.innerHTML;
     };
 
-    Editor.prototype.on_edit = function() {
+    Editor.prototype.onEdit = function() {
       console.log("Fixie.Editor : info : " + this.options.property + " was edited");
       this.stopListening(this.model, "change:" + this.options.property);
-      return this.model.set(this.options.property, this.clean_editor_content());
+      return this.model.set(this.options.property, this.cleanEditorContent());
     };
 
     return Editor;
@@ -330,9 +329,6 @@
       ol: scrubAttributes,
       li: scrubAttributes,
       div: scrubAttributes,
-      h3: convertTagScrubber({
-        tagName: 'h1'
-      }),
       "default": scrubAttributes
     }
   };
@@ -355,8 +351,8 @@
 
     URLEditor.prototype.events = function() {
       return {
-        'keyup .fixie-editor-content': this.on_edit,
-        'paste .fixie-editor-content': this.on_edit,
+        'keyup .fixie-editor-content': this.onEdit,
+        'paste .fixie-editor-content': this.onEdit,
         'click .fixie-url-link-edit': this.on_link_edit
       };
     };
@@ -399,7 +395,7 @@
     function PlainTextEditor() {
       this.initialize = __bind(this.initialize, this);
       this.render = __bind(this.render, this);
-      this.clean_editor_content = __bind(this.clean_editor_content, this);
+      this.cleanEditorContent = __bind(this.cleanEditorContent, this);
       this.events = __bind(this.events, this);
       _ref4 = PlainTextEditor.__super__.constructor.apply(this, arguments);
       return _ref4;
@@ -411,12 +407,12 @@
 
     PlainTextEditor.prototype.events = function() {
       return {
-        'keyup .fixie-editor-content': this.on_edit,
-        'paste .fixie-editor-content': this.on_edit
+        'keyup .fixie-editor-content': this.onEdit,
+        'paste .fixie-editor-content': this.onEdit
       };
     };
 
-    PlainTextEditor.prototype.clean_editor_content = function() {
+    PlainTextEditor.prototype.cleanEditorContent = function() {
       var $el, content, htmlInEl, len;
       $el = this.$('.fixie-editor-content');
       content = $el.text();
@@ -459,12 +455,11 @@
     __extends(RichTextEditor, _super);
 
     function RichTextEditor() {
-      this.initialize = __bind(this.initialize, this);
-      this.render = __bind(this.render, this);
-      this.events = __bind(this.events, this);
-      this.exec_cmd = __bind(this.exec_cmd, this);
+      this.execCmd = __bind(this.execCmd, this);
       this.insertLink = __bind(this.insertLink, this);
       this.dispatch = __bind(this.dispatch, this);
+      this.render = __bind(this.render, this);
+      this.events = __bind(this.events, this);
       _ref5 = RichTextEditor.__super__.constructor.apply(this, arguments);
       return _ref5;
     }
@@ -473,58 +468,13 @@
 
     RichTextEditor.prototype.scrubber = new Scrubber(RuleSets.RichText);
 
-    RichTextEditor.prototype.dispatch = function(command) {
-      if (document.execCommand) {
-        if (command && document.queryCommandEnabled(command)) {
-          console.log("Fixie.Editor : info : running command '" + command + "'");
-          document.execCommand(command);
-          return this.on_edit();
-        } else {
-          return console.log("Fixie.Editor : info : command " + command + " is currently not enabled.");
-        }
-      } else {
-        throw new Error('Fixie.Editor : error : browser support is not available for this operation');
-      }
-    };
-
-    RichTextEditor.prototype.insertLink = function() {
-      var link, linkUrl;
-      if (typeof document !== "undefined" && document !== null ? document.queryCommandEnabled('createlink') : void 0) {
-        linkUrl = window.prompt('Please enter a URL:', this.model.get(this.options.link_url));
-        link = scrubUrl(linkUrl);
-        if (link) {
-          document.execCommand('createlink', false, link);
-          this.on_edit();
-        } else {
-          window.alert('Please try again. Urls must begin with /, http://, or https://');
-        }
-      }
-      return console.log('Fixie.Editor : info : createlink is not enabled');
-    };
-
-    RichTextEditor.prototype.exec_cmd = function() {
-      var cmd_dispatch, command, dispatch;
-      cmd_dispatch = {
-        bold: this.dispatch,
-        italic: this.dispatch,
-        insertOrderedList: this.dispatch,
-        insertUnorderedList: this.dispatch,
-        insertLink: this.insertLink
-      };
-      command = find_command(event.target);
-      if (command in cmd_dispatch) {
-        dispatch = cmd_dispatch[command](command);
-      } else {
-        throw new Error('Fixie.Editor : error : unexepected fixie-cmd');
-      }
-      return false;
-    };
+    RichTextEditor.prototype.initialize = function() {};
 
     RichTextEditor.prototype.events = function() {
       return {
-        'click .fixie-toolbar-item': this.exec_cmd,
-        'keyup .fixie-editor-content': this.on_edit,
-        'paste .fixie-editor-content': this.on_edit
+        'click .fixie-toolbar-item': this.execCmd,
+        'keyup .fixie-editor-content': this.onEdit,
+        'paste .fixie-editor-content': this.onEdit
       };
     };
 
@@ -547,8 +497,51 @@
       return this;
     };
 
-    RichTextEditor.prototype.initialize = function() {
-      return RichTextEditor.__super__.initialize.apply(this, arguments);
+    RichTextEditor.prototype.dispatch = function(command) {
+      if (document.execCommand) {
+        if (command && document.queryCommandEnabled(command)) {
+          console.log("Fixie.Editor : info : running command '" + command + "'");
+          document.execCommand(command);
+          return this.onEdit();
+        } else {
+          return console.log("Fixie.Editor : info : command " + command + " is currently not enabled.");
+        }
+      } else {
+        throw new Error('Fixie.Editor : error : browser support is not available for this operation');
+      }
+    };
+
+    RichTextEditor.prototype.insertLink = function() {
+      var link, linkUrl;
+      if (typeof document !== "undefined" && document !== null ? document.queryCommandEnabled('createlink') : void 0) {
+        linkUrl = window.prompt('Please enter a URL:', this.model.get(this.options.link_url));
+        link = scrubUrl(linkUrl);
+        if (link) {
+          document.execCommand('createlink', false, link);
+          this.onEdit();
+        } else {
+          window.alert('Please try again. Urls must begin with /, http://, or https://');
+        }
+      }
+      return console.log('Fixie.Editor : info : createlink is not enabled');
+    };
+
+    RichTextEditor.prototype.execCmd = function() {
+      var command, commandName, dispatchTable;
+      dispatchTable = {
+        bold: this.dispatch,
+        italic: this.dispatch,
+        insertOrderedList: this.dispatch,
+        insertUnorderedList: this.dispatch,
+        insertLink: this.insertLink
+      };
+      commandName = $(event.target).closest('[data-fixie-cmd]').data('fixie-cmd');
+      command = dispatchTable[commandName];
+      if (!command) {
+        throw new Error("Fixie.Editor : error : unexepected fixie-cmd: " + commandName);
+      }
+      command(commandName);
+      return false;
     };
 
     return RichTextEditor;
@@ -559,17 +552,17 @@
     __extends(DateEditor, _super);
 
     function DateEditor() {
-      this.on_edit = __bind(this.on_edit, this);
+      this.onEdit = __bind(this.onEdit, this);
       _ref6 = DateEditor.__super__.constructor.apply(this, arguments);
       return _ref6;
     }
 
-    DateEditor.prototype.on_edit = function() {
+    DateEditor.prototype.onEdit = function() {
       var e, format, prop_set, val;
       console.log("Fixie.DateEditor : info : " + this.options.property + " was edited");
       try {
         format = this.options.format || 'iso';
-        val = (new Date(this.clean_editor_content())).toISOString();
+        val = (new Date(this.cleanEditorContent())).toISOString();
         if (format === 'date') {
           val = val.substring(0, 10);
         }
@@ -670,20 +663,26 @@
     };
 
     FiddleView.prototype.rawDOMUpdated = function() {
-      var scrubbedSelection;
+      var scrubbedHTML, scrubbedSelection;
       scrubbedSelection = $(this.scrubber.cleanNode($("<div>" + (this.model.get('raw-dom')) + "</div>")[0]));
       this.$('#raw-html').val(this.model.get('raw-dom'));
       this.$('#scrubbed-dom').empty().append(scrubbedSelection);
-      return this.$('#scrubbed-html').text(scrubbedSelection.html());
+      scrubbedHTML = _.reduce(scrubbedSelection, (function(acc, x) {
+        return acc + x.outerHTML;
+      }), '');
+      return this.$('#scrubbed-html').text(scrubbedHTML);
     };
 
     FiddleView.prototype.rawHTMLUpdated = function() {
-      var rawHTML, scrubbedSelection;
+      var rawHTML, scrubbedHTML, scrubbedSelection;
       rawHTML = this.model.get('raw-html');
       scrubbedSelection = $(this.scrubber.cleanNode($("<div>" + rawHTML + "</div>")[0]));
       this.$('#raw-dom').html(rawHTML);
       this.$('#scrubbed-dom').empty().append(scrubbedSelection);
-      return this.$('#scrubbed-html').text(scrubbedSelection.html());
+      scrubbedHTML = _.reduce(scrubbedSelection, (function(acc, x) {
+        return acc + x.outerHTML;
+      }), '');
+      return this.$('#scrubbed-html').text(scrubbedHTML);
     };
 
     FiddleView.prototype.updateFromRawDOM = function() {
